@@ -295,3 +295,201 @@ lo eliminará en cascada. De allí la razón por la que colocamos el CascadeType
 ````
 [DELETE] http://localhost:8080/unidireccional/v1/one-to-one/ports/8
 ````
+
+---
+
+### One To Many
+
+> Por defecto (tabla_intermedia)
+
+- En nuestra asociación de One To Many entre Team y Player, **solo usando la anotación @OneToMany**,
+  **por defecto** hibernate crea una tabla intermedia entre teams y players (teams_players) con el
+  identificador de cada tabla, donde
+  no creará una clave primaria en esa tabla intermedia, sino más bien las siguiente constraint:
+  **unique: player_id**, además los **foreing: player_id y team_id**.
+- Las tablas generadas en la BD, con esta **configuración por defecto** que proporciona hibernate
+  sería así:  
+  ![One To Many unidireccional](assets/teams_players_by_default.png)
+- Si quisiéramos definir nuestra propia tabla intermedia y no la que JPA/Hibernate crea por defecto,
+  podemos agregar la siguiente configuración sobre la anotación @OneToMany:
+
+````
+@JoinTable(name = "tbl_teams_players",
+        joinColumns = @JoinColumn(name = "team_id"),
+        inverseJoinColumns = @JoinColumn(name = "player_id"),
+        uniqueConstraints = @UniqueConstraint(columnNames = { "player_id" }))
+@OneToMany
+private List<Player> players = new ArrayList<>();
+````
+
+> Personalizada (fk en la tabla muchos)
+
+- Si no quisiéramos que nos genere la tabla intermedia, sino más bien, al ser una asociación
+  de uno a muchos unidireccional, quisiéramos que la Primary Key de la tabla principal (Teams)
+  se ubique en una columna de la tabla hija (Players) como Foreign Key, únicamente agregaríamos
+  la anotación **@JoinColumn(name = "team_id")** especificándole en el atributo name el nombre
+  que tomará el Foreing Key (team_id) en la tabla Players.
+
+````
+¡IMPORTANTE! este tipo de configuración sólo se hace en una asociación UNIDIRECCIONAL
+````
+
+- Cuando una clase es principal, es decir una clase padre, en este caso nuestra entity
+  Team sería nuestra clase principal, **debemos colocar el cascade**. Existen distintos tipos,
+  el que usaremos será el CascadeType.ALL, este permitirá persistir, remover, etc.. sus
+  entidades hijas (Player). Por ejemplo, cada vez que se cree o guarde un Team, automáticamente
+  creará a su dependiente, es decir a sus relacionados, en nuestro caso a Player. Podemos crear
+  un Team junto a sus Players y lo persistirá.
+- Además, agregamos el **orphanRemoval = true**, esto significa que si se elimina la clase
+  padre (Team) sus hijos no queden huérfanos, así que también serán eliminados.
+- Nuestras entidades quedarían así:
+
+````
+@Entity
+@Table(name = "teams")
+public class Team {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+
+    @JoinColumn(name = "team_id")
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Player> players = new ArrayList<>();
+    
+    # getters, setters, toString()...
+````
+
+````
+@Entity
+@Table(name = "players")
+public class Player {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+    private String number;
+    
+    # getters, setters, toString()...
+````
+
+- Las tablas generadas en la BD, con esta **configuración personalizada** quedarían así:  
+  ![One To Many unidireccional](assets/teams_players_personalizada.png)
+
+#### Guardando Team y sus Players
+
+Guardamos datos del Team y sus Players enviados en un mismo objeto JSON.
+
+````
+[POST] http://localhost:8080/unidireccional/v1/one-to-many/teams
+````
+
+**Request**
+
+````
+{
+    "name": "Perú",
+    "players": [
+        {
+            "name": "Farfan",
+            "number": "10"
+        },
+        {
+            "name": "Flores",
+            "number": "20"
+        },
+        {
+            "name": "Carrillo",
+            "number": "18"
+        }
+    ]
+}
+````
+
+**Response**
+
+````
+{
+    "id": 3,
+    "name": "Perú",
+    "players": [
+        {
+            "id": 4,
+            "name": "Farfan",
+            "number": "10"
+        },
+        {
+            "id": 5,
+            "name": "Flores",
+            "number": "20"
+        },
+        {
+            "id": 6,
+            "name": "Carrillo",
+            "number": "18"
+        }
+    ]
+}
+````
+
+#### Actualizando Team y sus Players (Eliminando players y agregando nuevos)
+
+Actualizamos los datos del Team y los players, además de eso, agregamos nuevos players
+al Team y eliminamos otros.
+
+````
+[PUT] http://localhost:8080/unidireccional/v1/one-to-many/teams/5
+````
+
+**Request**
+
+````
+{
+    "name": "Argentina FC",
+    "players": [
+        /*Actualizar*/
+        {
+            "id": 12,
+            "name": "Leonel Messi",
+            "number": "10"
+        },
+        
+        /*Eliminar*/
+        /*
+        /* {
+        /*    "id": 13,
+        /*    "name": "El dibu",
+        /*    "number": "1"
+        /* }
+        */
+        
+        /*Agregar*/
+        {
+            "name": "Di María",
+            "number": "11"
+        }
+    ]
+}
+````
+
+**Response**
+
+````
+{
+    "id": 5,
+    "name": "Argentina FC",
+    "players": [
+        {
+            "id": 12,
+            "name": "Leonel Messi",
+            "number": "10"
+        },
+        {
+            "id": 14,
+            "name": "Di María",
+            "number": "11"
+        }
+    ]
+}
+````
