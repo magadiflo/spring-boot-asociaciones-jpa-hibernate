@@ -2,7 +2,7 @@
 
 ## Asociaciones Unidireccionales
 
-### One To One
+### One To One (Unidireccional)
 
 - La anotación @OneToOne en un tipo de relación unidireccional podría
   estar en cualquiera de las dos entidades relacionadas (Port o Service).
@@ -298,7 +298,7 @@ lo eliminará en cascada. De allí la razón por la que colocamos el CascadeType
 
 ---
 
-### One To Many
+### One To Many (Unidireccional)
 
 > Por defecto (tabla_intermedia)
 
@@ -496,7 +496,7 @@ al Team y eliminamos otros.
 
 ---
 
-### Many To One
+### Many To One (Unidireccional)
 
 - Este tipo de asociación ManyToOne unidireccional lo podríamos usar cuando no quisiéramos obtener
   los Employees de un determinado Department, sino solo saber de qué department es un employee.
@@ -592,7 +592,7 @@ public class Department {
 
 ---
 
-### Many To Many
+### Many To Many (Unidireccional)
 
 > Por defecto
 
