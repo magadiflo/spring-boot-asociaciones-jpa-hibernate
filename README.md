@@ -493,3 +493,97 @@ al Team y eliminamos otros.
     ]
 }
 ````
+
+### Many To One
+
+- Este tipo de asociación ManyToOne unidireccional lo podríamos usar cuando no quisiéramos obtener
+  los Employees de un determinado Department, sino solo saber de qué department es un employee.
+- En la entidad propietaria, **dueña de la relación (Employee)** definimos un atributo que pasará a
+  ser un **foreign key** de la tabla Department. En nuestro caso definimos el atributo **department**
+  en nuestra **Entity Employee**.
+- Por defecto, hibernate crea la foreign key con el nombre del atributo definido seguido de un guión bajo
+  más el id: **nombre-del-atributo-definido_id**.
+- Si quisiéramos cambiar el nombre de la foreign key creada automáticamente, podemos usar
+  la anotación **@JoinColumn(name = "department_id")**. En este caso, estamos definiendo explícitamente
+  el mismo nombre (department_id) que hibernate crearía.
+- Nuestras dos entidades quedarían de la siguiente manera:
+
+````
+@Entity
+@Table(name = "employees")
+public class Employee {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String fullName;
+    private String phone;
+    private String email;
+
+    @ManyToOne
+    @JoinColumn(name = "department_id")
+    private Department department;
+    
+    # Getters, Setters, toString()...
+````
+
+````
+@Entity
+@Table(name = "departments")
+public class Department {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+    
+    # Getters, Setters, toString()...
+````
+
+- Las tablas generadas en la BD, quedarían así:  
+  ![unidireccional - ManyToOne](./assets/unidireccional_many-to-one.png)
+
+#### Guardando Employee a un department existente en la BD
+
+- Creamos un nuevo empleado y lo guardamos asociándolo a un departamento
+  existente en la BD.
+- **¡ATENCIÓN!**, para guardar un nuevo empleado junto a su departamento, este último
+  debe existir en la base de datos.
+- **¡ATENCIÓN!**, No es necesario pasar todos los atributos del **department**, solo se requiere
+  el id, esto es porque solo requerimos el id para poder asociarlo al Employee
+  como Foreign Key. Ahora, si solo se pasa el id, como respuesta vendrá en el objeto
+  json los atributos del department en null, excepto el id. Ahora, si quisiéramos
+  que la respuesta también contenga los datos completos del department, entonces
+  debemos modificar el código del EmployeeResource para hacer otra consulta y obtener
+  los datos completos del Employee y Department, simplemente haciendo un **findById(id-del-empleado)**.
+
+````
+[POST] http://localhost:8080/unidireccional/v1/many-to-one
+````
+
+**Request**
+
+````
+{
+    "fullName": "Gabriel Abraham",
+    "phone": "948759685",
+    "email": "shaga_arga9@gmail.com",
+    "department": { <------------- Este departamento existe en la BD
+        "id": 1,
+        "name": "Systems"
+    }
+}
+````
+
+**Response**
+
+````
+{
+    "id": 2,
+    "fullName": "Gabriel Abraham",
+    "phone": "948759685",
+    "email": "shaga_arga9@gmail.com",
+    "department": {
+        "id": 1,
+        "name": "Systems"
+    }
+}
+````
