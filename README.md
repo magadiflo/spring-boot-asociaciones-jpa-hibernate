@@ -494,6 +494,8 @@ al Team y eliminamos otros.
 }
 ````
 
+---
+
 ### Many To One
 
 - Este tipo de asociación ManyToOne unidireccional lo podríamos usar cuando no quisiéramos obtener
@@ -556,7 +558,7 @@ public class Department {
   los datos completos del Employee y Department, simplemente haciendo un **findById(id-del-empleado)**.
 
 ````
-[POST] http://localhost:8080/unidireccional/v1/many-to-one
+[POST] http://localhost:8080/unidireccional/v1/many-to-one/employees
 ````
 
 **Request**
@@ -585,5 +587,190 @@ public class Department {
         "id": 1,
         "name": "Systems"
     }
+}
+````
+
+---
+
+### Many To Many
+
+> Por defecto
+
+- A continuación se muestran las tablas generadas por defecto en la BD, solo usando la anotación:
+
+````
+ @ManyToMany
+ private List<Course> courses = new ArrayList<>();
+````
+
+![unidireccional - many-to-many](./assets/unidireccional_many-to-many.png)
+
+- En la imagen anterior se puede observar que se genera una tabla intermedia entre la clase
+  principal y la otra entidad **(students_courses)**.
+- Las dos columnas generadas en la tabla intermedia son Foreing Key de las tablas relacionadas.
+- El nombre de la Foreign Key del Courses la genera en función al nombre del atributo definido
+  en la propiedad a relacionar. En nuestro caso se colocó courses, por eso es que hibernate lo usa
+  concatenándole el _id.
+- La tabla intermedia admite duplicados, es decir un estudiante podría tener asignado dos
+  veces el mismo curso, quisá en otro contexto eso estaría bien, y quisá en otro no, todo va a
+  depender del análisis que hagamos, pero por defecto admite duplicados:  
+  ![unidireccional - many-to-many duplicate](./assets/unidireccional_many-to-many-duplicate-register.png)
+
+> Personalizando la relación
+
+- Nuestra entidad dueña de la relación quedaría de esta manera:
+
+````
+@Entity
+@Table(name = "students")
+public class Student {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+    private String code;
+    @JoinTable(
+            name = "tbl_students_courses",
+            joinColumns = @JoinColumn(name = "student_id"),
+            inverseJoinColumns = @JoinColumn(name = "course_id"),
+            uniqueConstraints = @UniqueConstraint(columnNames = {"student_id", "course_id"})
+    )
+    @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    private List<Course> courses = new ArrayList<>();
+    
+    # .....
+````
+
+- En este caso nuestra entidad Student será nuestra entidad principal o parent dueño de la relación, de esta forma
+  cuando se persista un Student, también pueda hacerlo en cascada con sus Courses, esto ocurre
+  gracias a que manejaremos el CASCADE.
+- **¡IMPORTANTE!**, no podemos colocar el CascadeType.ALL ya que eso incluiría el **REMOVE**
+  y en una relación de muchos a muchos puede que algún Student tenga los mismos cursos del
+  Student que se está tratando de eliminar. Es decir, **si se elimina un Student, con el CascadeType.ALL
+  se empezarán a eliminar en cascada, los cursos asociados a dicho estudiante, pero si hay otro
+  estudiante que tiene uno de los cursos que será eliminado, se generará un error de constraint.**
+- Con la anotación **@JoinTable(...)** creamos nuestra propia tabla intermedia con un nombre distinto
+  al creado por defecto. En el joinColumns definimos el atributo que tomará en la tabla intermedia
+  nuestra entidad dueña de la relación. En el inverseJoinColumns, colocamos el atributo que hará referencia
+  a la otra entidad.
+- **¡IMPORTANTE!**, en esta configuración con el atributo **uniqueConstraints** definimos los
+  los atributos que serán únicos, en este caso, estamos diciendo que la combinación de
+  **student_id y course_id** deben ser únicos, de esa manera evitamos duplicar registros.
+- La tabla intermedia con las configuraciones realizadas quedaría así:  
+  ![unidireccional - many-to-many configurada](./assets/unidireccional_many-to-many_configurada.png)
+
+#### Guardando Student junto a sus Courses
+
+````
+[POST] http://localhost:8080/unidireccional/v1/many-to-many/students
+````
+
+**Request**
+
+````
+{
+    "name": "Alicia",
+    "code": "0201414060",
+    "courses": [
+        {
+            "name": "Repostería",
+            "credits": 16
+        },
+        {
+            "name": "Corte y Confección",
+            "credits": 18
+        }
+    ]
+}
+````
+
+**Response**
+
+````
+{
+    "id": 2,
+    "name": "Alicia",
+    "code": "0201414060",
+    "courses": [
+        {
+            "id": 3,
+            "name": "Repostería",
+            "credits": 16
+        },
+        {
+            "id": 4,
+            "name": "Corte y Confección",
+            "credits": 18
+        }
+    ]
+}
+````
+
+#### Eliminando Student
+
+Podemos eliminar un student que tiene cursos asociados en la tabla intermedia, pese a que hay
+otros alumnos que también tienen los mismos cursos. Al eliminar el student, eliminará también
+la fila completa registrado en la tabla intermedia, pero no eliminará el curso de la tabla
+courses ya que NO le definimos en el CascadeType el ALL o el REMOVE.
+
+````
+[DELETE] http://localhost:8080/unidireccional/v1/many-to-many/students/1
+````
+
+#### Actualizando Student y sus Courses
+
+````
+[PUT] http://localhost:8080/unidireccional/v1/many-to-many/students/2
+````
+
+**Request**
+
+````
+{
+    "name": "Alicia",
+    "code": "0201414060",
+    "courses": [
+        /*Actualizar*/
+        {
+            "id": 3,
+            "name": "Repostería - 2023",
+            "credits": 16
+        },
+        /*Eliminar*/
+        /*
+        {
+            "id": 4,
+            "name": "Corte y Confección",
+            "credits": 18
+        }
+        */
+        /*Crear*/
+        {
+            "name": "Informática empresarial",
+            "credits": 20
+        }
+    ]
+}
+````
+
+**Response**
+
+````
+{
+    "id": 2,
+    "name": "Alicia",
+    "code": "0201414060",
+    "courses": [
+        {
+            "id": 3,
+            "name": "Repostería - 2023",
+            "credits": 16
+        },
+        {
+            "id": 5,
+            "name": "Informática empresarial",
+            "credits": 20
+        }
+    ]
 }
 ````

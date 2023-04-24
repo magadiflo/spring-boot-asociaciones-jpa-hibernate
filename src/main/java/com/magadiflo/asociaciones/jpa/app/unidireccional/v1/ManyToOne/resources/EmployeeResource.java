@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping(path = "/unidireccional/v1/many-to-one")
+@RequestMapping(path = "/unidireccional/v1/many-to-one/employees")
 public class EmployeeResource {
 
     private final IEmployeeRepository employeeRepository;
