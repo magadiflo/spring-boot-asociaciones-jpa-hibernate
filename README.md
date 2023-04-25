@@ -893,4 +893,88 @@ public void deleteUser() {
     this.user = null;
 }
 ````
+
+---
+
+### One To Many - Many To One (Bidireccional)
+
+- Recordar que como es una asociación BIDIRECCIONAL, debemos asociar en ambos sentidos
+  las entidades. Si no hacemos eso, veremos que las referencias o llave foránea se
+  registrará en null. Para eso habría que agregar algunos métodos auxiliares en las
+  entities y cuando se guarde o actualice realizar esas llamadas (ver los controladores).
+- Nuestra entity principal o padre quedaría así:
+
+````
+@Entity
+@Table(name = "customers")
+public class Customer {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+    private String dni;
+    @JsonIgnoreProperties(value = {"customer"})
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, mappedBy = "customer")
+    private List<Invoice> invoices = new ArrayList<>();
+    
+    # ...
+    # ...
+    # ...
+    
+    // Estableciendo asociación en ambos sentidos ----
+
+    /**
+     * (1) Para que guarde la FK de customer en la tabla Invoices (customer_id)
+     */
+    public void addInvoice(Invoice invoice) {
+        this.invoices.add(invoice);
+        invoice.setCustomer(this); // (1)
+    }
+
+    /**
+     * (2) Al invoice le quitamos la FK de customer estableciéndolo en null, quedando huérfana,
+     * de esa manera como tenemos el orphanRemoval=true, se eliminará
+     */
+    public void deleteInvoice(Invoice invoice) {
+        this.invoices.remove(invoice);
+        invoice.setCustomer(null); // (2)
+    }
+````
+
+- La entity dueña de la relación quedaría así:
+
+````
+@Entity
+@Table(name = "invoices")
+public class Invoice {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private Integer number;
+    private Double total;
+    private LocalDate createAt;
+    @JsonIgnoreProperties(value = {"invoices"})
+    @JoinColumn(name = "customer_id")
+    @ManyToOne
+    private Customer customer;
+    
+    # ...
+````
+
+- NOTA 01. Para cualquier relación BIDIRECCIONAL solo en el @OneToMany se indica la relación INVERSA con el mappedBy.
+  Con el mappedBy le indicamos cuál es el atributo en la clase Invoice que está mapeado a esta clase Customer,
+  en nuestro caso es el atributo "customer" que en la clase Invoice está definido como un atributo private.
+- NOTA 02. Como es una relación BIDIRECCIONAL el @JoinColumn en esta clase Customer YA NO VA, tal como se hizo en
+  la relación Unidireccional (@OneToMany). El @JoinColumn va en la otra clase cuyo atributo está definido como un
+  @ManyToOne, que es dueña de la relación, es decir en la clase Invoice se creará la FK de Customer.
+- NOTA 03. Cuando hablamos de las relaciones **uno a muchos - muchos a uno bidireccionales**, en los vínculos
+  uno de los dos lados debe ser el dueño de la relación. **Por norma general el lado de muchos debe
+  ser siempre el dueño**
+- NOTA 04. Debemos evitar en el método toString() el atributo Invoice o Customer, o solo debemos dejar uno de los dos,
+  ya que si dejamos ambos se generará un bucle infinito.
+- Recordar que con el uso de la anotación **@JsonIgnoreProperties(...)** evitamos que se genere un ciclo infinito
+  ya que estamos en una asociación bidireccional.
+- Las tablas generadas en la BD son:  
+  ![bidireccional - one-to-many_many-to-one.png](./assets/bidireccional_one-to-many_many-to-one.png)
+
 ---
