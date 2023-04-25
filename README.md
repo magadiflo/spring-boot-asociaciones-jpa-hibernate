@@ -774,3 +774,123 @@ courses ya que NO le definimos en el CascadeType el ALL o el REMOVE.
     ]
 }
 ````
+
+---
+
+## Asociaciones Bidireccionales
+
+### One To One (Bidireccional)
+
+- Nuestras entidades User y Credential estarán asociadas mediante @OneToOne bidireccional.
+- Ambas entidades deberán llevar la anotación @OneToOne.
+- De acuerdo a nuestro análisis definimos que nuestra clase principal, o sea
+  **nuestra clase padre será la entity User**, mientras que la **entity Credential, será nuestra
+  clase dueña de la relación**.
+- Teniendo nuestra entity principal y nuestra entity dueña de la relación ya definidas,
+  agregamos algunas configuraciones para establecer la asociación.
+- Nuestra entity principal o padre quedaría así:
+
+````
+@Entity
+@Table(name = "users")
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String nombre;
+    private String role;
+    @JsonIgnoreProperties(value = {"user"})
+    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true, mappedBy = "user")
+    private Credential credential;
+    
+    # ...
+````
+
+- Nuestra entity dueña de la relación quedaría así:
+
+````
+@Entity
+@Table(name = "credentials")
+public class Credential {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String username;
+    private String password;
+    @JsonIgnoreProperties(value = {"credential"})
+    @JoinColumn(name = "user_id", unique = true)
+    @OneToOne
+    private User user;
+    
+    # ...
+````
+
+- **¡IMPORTANTE!**, nunca pueden estar juntos el **@JoinColumn** con el **mappedBy**.
+- **¡IMPORTANTE!**, usamos en ambas entidades la anotación **@JsonIgnoreProperties(...)**, esta anotación no
+  forma parte de la asociación, simplemente lo usamos para evitar que se produzca un ciclo infinito cuando
+  se llame a alguna entidad. Por ejemplo, si se llama a la entidad User, este llamará a la entidad Credential,
+  a su vez, Credential, volverá a llamar a User, y nuevamente User a Credential, entonces eso forma un ciclo de
+  llamadas generando un desbordamiento. Esto ocurre porque ambas entidades están asociadas de manera bidireccional,
+  entonces para evitar que eso ocurra es que se usa la anotación **@JsonIgnoreProperties(...)** indicándole que
+  cuando se llame, por ejemplo, a la propiedad User, que ignore su atributo credential, tal como se observa en el
+  siguiente código:
+
+````
+@JsonIgnoreProperties(value = {"credential"})
+@JoinColumn(name = "user_id", unique = true)
+@OneToOne
+private User user;
+````
+
+````
+Ahora, estas llamadas cíclicas ocurren cuando se hace el llamado a través de API REST y
+exponemos las entidades a esas llamadas. Las buenas prácticas indican que no se deben exponer
+directamente las entities a través de los servicios rest y que en su lugar debemos usar
+las DTO. Entonces, usando DTO para exponer la información, ya no necesitaríamos usar la anotación
+@JsonIgnoreProperties.
+````
+
+- En nuestra entity dueña de la relación (Credential) colocamos la anotación **@JoinColumn(name = "user_id", unique =
+  true)** para indicarle que cree una columna en esta table llamada **user_id** que será
+  una Foreign Key de la entity User. Además le decimos que será único para
+  tener la forma de uno a uno.
+- En nuestra entity principal (User), agregamos algunas propiedades a la anotación
+  **@OneToOne(cascade = CascadeType.ALL, orphanRemoval = true, mappedBy = "user")**.
+  De estas tres configuraciones, el que no hemos visto hasta ahora es el **mappedBy**;
+  con ese elemento le indicamos a la clase principal cuál es la Foreing Key en la
+  entidad Credential; es decir, le decimos, la asociación va a estar mappeada a través
+  de la propiedad **user** definida en la entidad Credential.
+- Las tablas generadas en la BD son:  
+  ![bidireccional - one-to-one](./assets/bidireccional_one-to-one.png)
+
+- Como estamos en una **asociación bidireccional**, cuando se guarde un registro, **necesitamos
+  previamente establecer la relación en ambos sentidos**. Si no lo hacemos, la clave foránea quedará en
+  **null** y cuando llamemos al registro no se mostrarán los datos de la asociación.
+- En la entity User establecemos la relación en ambos sentidos:
+
+````
+public void addCredential(Credential credential) {
+    this.credential = credential;
+    credential.setUser(this);
+}
+
+public void deleteCredential() {
+    this.credential.setUser(null);
+    this.credential = null;
+}
+````
+
+- En la entity Credential establecemos la relación en ambos sentidos:
+
+````
+public void addUser(User user) {
+    this.user = user;
+    user.setCredential(this);
+}
+
+public void deleteUser() {
+    this.user.setCredential(null);
+    this.user = null;
+}
+````
+---
