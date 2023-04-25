@@ -978,3 +978,141 @@ public class Invoice {
   ![bidireccional - one-to-many_many-to-one.png](./assets/bidireccional_one-to-many_many-to-one.png)
 
 ---
+
+### Many To Many (Bidireccional)
+
+- Cuando hablamos de las relaciones OneToMany-ManyToOne (bidireccional) dijimos que en los vínculos
+  uno de los dos lados debe ser el dueño de la relación. Por norma general el lado muchos debe ser siempre
+  el dueño. Esto también se aplica para las relaciones de ManyToMany. **Como en esta ocasión ambos extremos
+  de la relación son muchos, tenemos la opción de seleccionar a quien creamos conveniente para ser
+  el dueño de la misma**.
+- En nuestro caso será la entidad **Book** el dueño de la relación, por lo tanto, la entidad
+  **Author** será el lado inverso por lo que debemos indicarlo colocando en la anotación
+  @ManyToMany el atributo **mappedBy**, cuyo valor será el nombre del atributo que representa la
+  lista de authors en la clase Book.
+- En el toString() de Author ya no debemos colocar el atributo books, porque en el
+  toString() de Book ya colocamos el atributo de authors, eso evitará que se vuelva cíclico
+  las llamadas. En resumen, colocar solo en uno de los dos lados el atributo de la lista, si
+  es que queremos ver sus datos.
+- Por defecto, hibernate crea la tabla intermedia, pero nosotros le diremos a hibernate que
+  queremos crear la tabla intermedia con nuestra propia configuración (nombre de columnas, nombre de la tabla, etc.)
+  para eso usamos la anotación **@JoinTable**.
+- A la hora de actualizar la relación (agregando o eliminando autores del libro) es importante mantener
+  la asociación en ambos sentidos, para eso usamos los métodos auxiliares definidos en la entidad Book.
+- Nuestra entity dueña de la relación quedaría así:
+
+````
+@Entity
+@Table(name = "books")
+public class Book {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String title;
+    private Integer publicationYear;
+    @JsonIgnoreProperties(value = {"books"})
+    @JoinTable(
+            name = "tbl_books_authors",
+            joinColumns = @JoinColumn(name = "book_id"),
+            inverseJoinColumns = @JoinColumn(name = "author_id"),
+            uniqueConstraints = @UniqueConstraint(columnNames = {"book_id", "author_id"})
+    )
+    @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    private List<Author> authors = new ArrayList<>();
+    
+    # ...
+    # ...
+    # ...
+    
+    // métodos auxiliares ----
+    public void addAuthor(Author author) {
+        this.getAuthors().add(author);
+        author.getBooks().add(this);
+    }
+    public void deleteAuthor(Author author) {
+        this.getAuthors().remove(author);
+        author.getBooks().remove(this);
+    }
+````
+
+- El lado inverso de la relación quedaría así:
+
+````
+@Entity
+@Table(name = "authors")
+public class Author {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+    private String nacionalidad;
+    @JsonIgnoreProperties(value = {"authors"})
+    @ManyToMany(mappedBy = "authors")
+    private List<Book> books = new ArrayList<>();
+    
+    # ...
+````
+
+- Las tablas generadas en la BD son:  
+  ![bidireccional - many-to-many](./assets/bidireccional_many-to-many.png)
+
+#### Actualiza Book y sus Authors (Eliminando authors y agregando nuevos)
+
+Actualizamos los datos del Book y los authors, además de eso, agregamos nuevos athors
+al Book y eliminamos otros.
+
+````
+[PUT] http://localhost:8080/bidireccional/v1/many-to-many/books/6
+````
+
+**Request**
+
+````
+{
+  "title": "Hibernate: Persistencia de objetos Spring Boot",
+  "publicationYear": 2020,
+  "authors": [
+      /*actualizando*/
+      {
+          "id": 8,
+          "name": "Eugenia P. Martínes",
+          "nacionalidad": "Española y Olé"
+      },
+      /*Eliminando*/
+      /*
+      {
+          "id": 9,
+          "name": "María Rodríguez Espejo",
+          "nacionalidad": "Española"
+      }
+      */
+      /*agregando*/
+      {
+          "name": "Mark Zukerberg",
+          "nacionalidad": "Estadounidense"
+      }
+  ]
+}
+````
+
+**Response**
+
+````
+{
+  "id": 6,
+  "title": "Hibernate: Persistencia de objetos Spring Boot",
+  "publicationYear": 2020,
+  "authors": [
+      {
+          "id": 8,
+          "name": "Eugenia P. Martínes",
+          "nacionalidad": "Española y Olé"
+      },
+      {
+          "id": 10,
+          "name": "Mark Zukerberg",
+          "nacionalidad": "Estadounidense"
+      }
+  ]
+}
+````
