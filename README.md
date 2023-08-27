@@ -1,5 +1,9 @@
 # Asociaciones de entidades usando JPA/Hibernate (Spring Data JPA): Unidireccionales y Bidireccionales
 
+---
+
+[Fuente: adictosaltrabajo](https://www.adictosaltrabajo.com/2020/04/02/hibernate-onetoone-onetomany-manytoone-y-manytomany/)
+
 ## Asociaciones Unidireccionales
 
 ### One To One (Unidireccional)
@@ -9,9 +13,10 @@
   Decidir en qué entidad irá la relación, dependerá del análisis que hagamos y
   cómo quisiéramos manejarlo.
 - En nuestro caso, decidimos que la **entidad Port será dueña de la relación**,
-  por lo tanto, la anotación **@OneToOne** la colocaremos en dicha entidad.
+  es decir, contendrá la `Foreign Key service_id` que apunta a la entidad **Service**,
+  por lo tanto, la anotación **@OneToOne** la colocaremos en **Port.**
 - Agregamos además la anotación **@JoinColumn(name = "service_id", unique = true)**
-  en nuestra entidad dueña de la relación. Por defecto, el nombre de la Foreign Key
+  en nuestra **entidad dueña de la relación**. Por defecto, el nombre de la Foreign Key
   generada por hibernate es igual al **nombre-del-atributo-definido_id (service_id)**.
   Si quisiéramos cambiar dicho nombre, usamos la anotación **@JoinColumn** y en el
   atributo name le definimos el nuevo nombre. En nuestro caso, estamos colocando
@@ -783,11 +788,14 @@ courses ya que NO le definimos en el CascadeType el ALL o el REMOVE.
 
 - Nuestras entidades User y Credential estarán asociadas mediante @OneToOne bidireccional.
 - Ambas entidades deberán llevar la anotación @OneToOne.
-- De acuerdo a nuestro análisis definimos que nuestra clase principal, o sea
-  **nuestra clase padre será la entity User**, mientras que la **entity Credential, será nuestra
-  clase dueña de la relación**.
+- De acuerdo a mi análisis he decidido que **nuestra clase principal, o sea
+  nuestra clase padre será la entity User**, mientras que la **entity Credential, será nuestra
+  clase dueña de la relación o propietario de la Foreign Key "user_id".**
 - Teniendo nuestra entity principal y nuestra entity dueña de la relación ya definidas,
   agregamos algunas configuraciones para establecer la asociación.
+- Una buena práctica es **usar cascade en la entidad padre,** ya que nos permite propagar los cambios y aplicarlos a los
+  hijos. En nuestro ejemplo, Credential no tiene sentido que exista si User no existe, por lo que **User es el que
+  tendrá el rol padre.**
 - Nuestra entity principal o padre quedaría así:
 
 ````
@@ -850,16 +858,18 @@ las DTO. Entonces, usando DTO para exponer la información, ya no necesitaríamo
 @JsonIgnoreProperties.
 ````
 
-- En nuestra entity dueña de la relación (Credential) colocamos la anotación **@JoinColumn(name = "user_id", unique =
+- En nuestra entity dueña de la relación **Credential** colocamos la anotación **@JoinColumn(name = "user_id", unique =
   true)** para indicarle que cree una columna en esta table llamada **user_id** que será
-  una Foreign Key de la entity User. Además le decimos que será único para
+  una **Foreign Key de la entity User**. Además le decimos que será único para
   tener la forma de uno a uno.
 - En nuestra entity principal (User), agregamos algunas propiedades a la anotación
   **@OneToOne(cascade = CascadeType.ALL, orphanRemoval = true, mappedBy = "user")**.
   De estas tres configuraciones, el que no hemos visto hasta ahora es el **mappedBy**;
-  con ese elemento le indicamos a la clase principal cuál es la Foreing Key en la
-  entidad Credential; es decir, le decimos, la asociación va a estar mappeada a través
-  de la propiedad **user** definida en la entidad Credential.
+  con ese elemento `le indicamos a la clase principal (User) cuál es la Foreing Key en la
+  entidad Credential`; es decir, le decimos, la asociación va a estar mappeada a través
+  de la propiedad **user** definida en la entidad Credential, ya que esa propiedad **(user)** tiene la anotación del
+  @JoinColumn con la clave foránea **user_id**. `Al final, el objetivo de las anotaciones es dejar claro donde está la
+  clave que mapea las relaciones.`
 - Las tablas generadas en la BD son:  
   ![bidireccional - one-to-one](./assets/bidireccional_one-to-one.png)
 
@@ -961,21 +971,37 @@ public class Invoice {
     # ...
 ````
 
-- NOTA 01. Para cualquier relación BIDIRECCIONAL solo en el @OneToMany se indica la relación INVERSA con el mappedBy.
-  Con el mappedBy le indicamos cuál es el atributo en la clase Invoice que está mapeado a esta clase Customer,
-  en nuestro caso es el atributo "customer" que en la clase Invoice está definido como un atributo private.
-- NOTA 02. Como es una relación BIDIRECCIONAL el @JoinColumn en esta clase Customer YA NO VA, tal como se hizo en
-  la relación Unidireccional (@OneToMany). El @JoinColumn va en la otra clase cuyo atributo está definido como un
-  @ManyToOne, que es dueña de la relación, es decir en la clase Invoice se creará la FK de Customer.
-- NOTA 03. Cuando hablamos de las relaciones **uno a muchos - muchos a uno bidireccionales**, en los vínculos
-  uno de los dos lados debe ser el dueño de la relación. **Por norma general el lado de muchos debe
-  ser siempre el dueño**
-- NOTA 04. Debemos evitar en el método toString() el atributo Invoice o Customer, o solo debemos dejar uno de los dos,
-  ya que si dejamos ambos se generará un bucle infinito.
+- **NOTA 01.** Para cualquier relación BIDIRECCIONAL solo en el @OneToMany se indica la relación INVERSA con el
+  mappedBy. Con el mappedBy le indicamos cuál es el atributo en la clase Invoice que está mapeado a esta clase Customer,
+  en nuestro caso es el atributo "customer" que en la clase Invoice está definido como un atributo private. En pocas
+  palabras el `mappedBy` en este tipo de relaciones bidireccionales iría en la entidad padre o sea en **Customer**.
+- **NOTA 02.** Como es una relación BIDIRECCIONAL el @JoinColumn en esta clase Customer YA NO VA, tal como se hizo en
+  la relación Unidireccional (@OneToMany). **El @JoinColumn va en la otra clase (Invoice) cuyo atributo está definido
+  como un @ManyToOne, que es dueña de la relación**, es decir **en la clase Invoice se creará la FK de customer_id**,
+  por lo tanto, en este tipo de relaciones bidireccionales el **lado propietario o dueño de la relación suele estar en
+  la entidad que tiene la anotación @ManyToOne.**
+- **NOTA 03.** Cuando hablamos de las relaciones `@OneToMany/@ManyToOne` **bidireccionales**, en los vínculos
+  uno de los dos lados debe ser el dueño de la relación. `Por norma general el lado de Muchos debe ser siempre el
+  dueño de la relación`, tomando como referencia nuestro ejemplo, el entity **Invoice tiene la anotación con lado
+  @ManyToOne, por lo tanto, es la entidad dueña de la relación.**
+- **NOTA 04.** Debemos evitar en el método toString() el atributo Invoice o Customer, o solo debemos dejar uno de los
+  dos, ya que si dejamos ambos se generará un bucle infinito.
 - Recordar que con el uso de la anotación **@JsonIgnoreProperties(...)** evitamos que se genere un ciclo infinito
   ya que estamos en una asociación bidireccional.
 - Las tablas generadas en la BD son:  
   ![bidireccional - one-to-many_many-to-one.png](./assets/bidireccional_one-to-many_many-to-one.png)
+
+**Fuente**:
+[StackOverflow](https://stackoverflow.com/questions/8931342/what-does-relationship-owner-means-in-bidirectional-relationship)
+
+> Las relaciones bidireccionales deben seguir estas reglas:
+> - El lado inverso debe hacer referencia a su lado propietario mediante el atributo mappedBy
+> - El lado propietario puede tener el atributo inversedBy
+> - @ManyToOne es siempre el lado dueño de una asociación bidireccional.
+> - @OneToMany es siempre el lado inverso de una asociación bidireccional
+> - El lado propietario de una asociación @OneToOne es la entidad con la tabla que contiene la clave externa
+> - El lado Muchos de las relaciones bidireccionales de muchos a uno no deben definir el atributo mappedBy
+> - Para relaciones bidireccionales de muchos a muchos, cualquiera de los lados puede ser el lado propietario
 
 ---
 
