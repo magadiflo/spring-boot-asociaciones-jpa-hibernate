@@ -798,6 +798,162 @@ courses ya que NO le definimos en el CascadeType el ALL o el REMOVE.
 
 ---
 
+### Many To Many (Unidireccional) - Creando tabla intermedia personalizada con clave primaria compuesta
+
+- [spring-boot-web-crud](https://github.com/magadiflo/spring-boot-web-crud.git)
+- [Many-To-Many Relationship in JPA](https://www.baeldung.com/jpa-many-to-many)
+
+En este apartado mostraremos cómo crear una asociación de muchos a muchos (unidireccional) pero creando nuestra propia
+tabla intermedia y además agregándole ciertos atributos que requiere nuestra tabla intermedia. Anteriormente, habíamos
+visto cómo personalizar nuestra tabla intermedia a través de la anotación `@JoinTable`, pero esa forma únicamente nos
+permite cambiar el nombre de la tabla intermedia, el nombre de las claves foráneas, es decir, dejamos que spring data
+jpa la cree automáticamente con nuestras configuraciones dadas.
+
+Pero qué pasa si queremos tener nuestra tabla intermedia con una `clave primaria compuesta` y además poder utilizar esa
+tabla intermedia para `almacenar ciertos atributos de la relación`, es allí que entra en juego lo que haremos en este
+apartado.
+
+Lo primero que haremos será crear nuestras dos entidades principales:
+
+````java
+
+@Entity
+@Table(name = "orders")
+public class Order {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String orderNumber;
+    private LocalDate orderDate;
+    private String status;
+    // getters and setters
+}
+````
+
+````java
+
+@Entity
+@Table(name = "products")
+public class Product {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+    private Double price;
+    // getters and setters
+
+}
+````
+
+Ahora que ya tenemos las entidades principales, necesitamos crear una clase que será usada como una clave primaria
+compuesta en la tabla intermedia. La clase se llamará `OrderProductPK`.
+
+````java
+
+@Embeddable
+public class OrderProductPK implements Serializable {
+    @ManyToOne
+    @JoinColumn(name = "order_id")
+    private Order order;
+
+    @ManyToOne
+    @JoinColumn(name = "product_id")
+    private Product product;
+
+    // getters and setters
+}
+````
+
+La anotación `@Embeddable` en JPA (Java Persistence API) se utiliza para marcar una clase como una clase embebible. Una
+clase embebible es una clase cuya instancia se puede insertar (embebida) como parte de otra entidad. Es útil para
+representar un grupo de atributos que se pueden reutilizar en varias entidades.
+
+**NOTA**
+> Tenga en cuenta que una clase de clave compuesta debe cumplir algunos requisitos clave:
+> * Tenemos que marcarlo con `@Embeddable`.
+> * Tiene que implementar `java.io.Serializable`.
+> * Necesitamos proporcionar una implementación de los métodos `hashcode()` y `equals()`.
+
+**NOTA**
+> Es importante recordar que cuando utilizas una entidad de relación como esta, debes manejar la persistencia de esa
+> relación manualmente. Por ejemplo, cuando guardas una relación entre un Order y un Product, necesitarás crear una
+> instancia de OrderProduct y persistirla en tu contexto de persistencia.
+
+Ahora procedemos a crear nuestra tabla intermedia que tendrá como clave primaria compuesta la clase creada
+anteriormente. Además, es importante observar que nuestra tabla intermedia `orders_products` tiene atributos adicionales
+que son propias de la relación.
+
+````java
+
+@Entity
+@Table(name = "orders_products")
+public class OrderProduct {
+
+    @EmbeddedId
+    private OrderProductPK id;
+
+    private Integer quantity;
+    private Double totalPrice;
+
+    // getters and setters
+}
+````
+
+La anotación `@EmbeddedId` en JPA se utiliza para denotar que una clase de entidad tiene una `clave primaria compuesta`.
+La clave primaria compuesta se representa mediante una clase embebible (marcada con `@Embeddable`) que contiene los
+campos que forman la clave. Cuando se utiliza `@EmbeddedId`, se indica que la clave primaria de la entidad está definida
+por una instancia de una clase embebible.
+
+Y si usamos `DBeaver` para ver el diagrama en la base de datos, veremos que las tablas y sus relaciones se han creado
+correctamente:
+
+![composite-primary-key.png](/assets/composite-primary-key.png)
+
+Ahora procedemos a crear los repositorios. Crearemos un repositorio para la entidad Order y otro para la entidad
+OrderProduct:
+
+````java
+public interface OrderRepository extends CrudRepository<Order, Long> {
+    @Query(value = """
+            SELECT o.id AS orderId, o.order_number AS orderNumber, o.order_date AS orderDate, o.status AS status,
+                    op.quantity AS quantity, op.total_price AS totalPrice,
+                    p.id AS productId, p.name AS name, p.price AS price
+            FROM orders AS o
+                INNER JOIN orders_products AS op ON(o.id = op.order_id)
+                INNER JOIN products AS p ON(op.product_id = p.id)
+            """, nativeQuery = true)
+    List<Tuple> findOrdersWithTheirProducts();
+}
+````
+
+````java
+public interface OrderProductRepository extends CrudRepository<OrderProduct, OrderProductPK> {
+
+}
+````
+
+También crearemos los respectivos controladores, pero para avanzar no los colocaré en esta documentación.
+
+El siguiente paso es realizar un guardado de orders con sus productos:
+
+````bash
+$ curl -v -X POST -H "Content-Type: application/json" -d "{\"orderId\": 4, \"orderProductIds\": [{\"productId\": 1, \"quantity\": 90, \"totalPrice\": 50.50}, {\"productId\": 2, \"quantity\": 5, \"totalPrice\": 12.50}, {\"productId\": 3, \"quantity\": 788, \"totalPrice\": 1000}]}" http://localhost:8080/unidireccional/v2/many-to-many/orders-products | jq
+>
+< HTTP/1.1 200
+< Content-Type: application/json
+< Transfer-Encoding: chunked
+< Date: Wed, 05 Jun 2024 04:29:33 GMT
+<
+4
+````
+
+La petición anterior lo que hace es enviar el id del order y los ids de los productos a insertar en la relación. Estos
+atributos ya deberían existir en la base de datos, es decir, ya debe existir el order con id = 1 y los productos con
+los ids que le pasemos. Lo único que estamos haciendo aquí es insertar la relación, además de insertar valores en los
+dos atributos de la relación `quantity` y el `totalPrice`.
+
+---
+
 ## Asociaciones Bidireccionales
 
 ### One To One (Bidireccional)
